@@ -7,9 +7,13 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using DMS.Web.Data;
 using DMS.Web.Models;
+using DMS.Web.Mapper;
+using DMS.Web.viewmodel;
+using Microsoft.AspNetCore.Authorization;
 
 namespace DMS.Web.Controllers
 {
+    [Authorize]
     public class DocumentsController : Controller
     {
         private readonly DMSDbContext _context;
@@ -22,28 +26,16 @@ namespace DMS.Web.Controllers
         // GET: Documents
         public async Task<IActionResult> Index()
         {
-              return _context.Documents != null ? 
-                          View(await _context.Documents.ToListAsync()) :
-                          Problem("Entity set 'DMSDbContext.Documents'  is null.");
+            var documentList = await _context.Documents.ToListAsync();
+            var documentListVM = documentList.ToViewModel();
+            if (documentListVM is not null)
+            {
+                return View(documentListVM);
+            }
+            return View(new List<DocumentViewModel>());
+
         }
 
-        // GET: Documents/Details/5
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null || _context.Documents == null)
-            {
-                return NotFound();
-            }
-
-            var document = await _context.Documents
-                .FirstOrDefaultAsync(m => m.DocumentId == id);
-            if (document == null)
-            {
-                return NotFound();
-            }
-
-            return View(document);
-        }
 
         // GET: Documents/Create
         public IActionResult Create()
@@ -54,69 +46,66 @@ namespace DMS.Web.Controllers
         // POST: Documents/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to.
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
+        
+        
         [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("DocumentId,Title,Description,Author,Content")] Document document)
+        public async Task<IActionResult> Create(DocumentViewModel documentViewModel)
         {
             if (ModelState.IsValid)
             {
-                _context.Add(document);
+                var profileRelativePath = SavefileName(documentViewModel.file);
+                // Add employee record to db
+                documentViewModel.FileName = profileRelativePath;
+
+                var documentModel = documentViewModel.ToModel();
+                _context.Add(documentModel);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
-            return View(document);
+            return View(documentViewModel);
         }
+
+
 
         // GET: Documents/Edit/5
-        public async Task<IActionResult> Edit(int? id)
-        {
-            if (id == null || _context.Documents == null)
-            {
-                return NotFound();
-            }
-
+        public async Task<IActionResult> Edit(int id)
+        {           
             var document = await _context.Documents.FindAsync(id);
-            if (document == null)
-            {
-                return NotFound();
-            }
-            return View(document);
+
+            var documentViewModel = document.ToViewModel();
+            
+            return View(documentViewModel);
         }
+
+
 
         // POST: Documents/Edit/5
         // To protect from overposting attacks, enable the specific properties you want to bind to.
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("DocumentId,Title,Description,Author,Content")] Document document)
+        public async Task<IActionResult> Edit(DocumentViewModel documentvm)
         {
-            if (id != document.DocumentId)
+            try
             {
-                return NotFound();
-            }
+                var document = documentvm.ToModel();
+                _context.Update(document);
 
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    _context.Update(document);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!DocumentExists(document.DocumentId))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                await _context.SaveChangesAsync();
             }
-            return View(document);
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+            return RedirectToAction(nameof(Index));
         }
+
+        private bool DocumentExists(int documentId)
+        {
+            throw new NotImplementedException();
+        }
+
+
 
         // GET: Documents/Delete/5
         public async Task<IActionResult> Delete(int? id)
@@ -150,14 +139,39 @@ namespace DMS.Web.Controllers
             {
                 _context.Documents.Remove(document);
             }
-            
+
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
-
-        private bool DocumentExists(int id)
+        public string SavefileName(IFormFile file)
         {
-          return (_context.Documents?.Any(e => e.DocumentId == id)).GetValueOrDefault();
+            // Save image to "profiles" folder        
+            var fileName = Path.GetFileNameWithoutExtension(file.FileName);  //Path.GetFileNameWithoutExtension(file.FileName)
+            //var indexOfDot = fileName.LastIndexOf(".");
+            //var fileExtenstion = fileName.Substring(indexOfDot);
+            var fileExtenstion  = Path.GetExtension(file.FileName);
+            var profileRelativePath = $"{fileName + Guid.NewGuid()}{fileExtenstion}";
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(),"wwwroot/Documentupload/fileupload", profileRelativePath);
+
+            using var stream = System.IO.File.Create(filePath);
+            file.CopyTo(stream);
+
+            return profileRelativePath;
         }
+
+        public IActionResult Download(DocumentViewModel documentViewModel)
+        {
+            if (documentViewModel.FileName == null)
+            {
+                return Content("<script>alert('File name not present.');</script>");
+            }
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(),"wwwroot/Documentupload/fileupload", documentViewModel.FileName);
+            //var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+            byte[] bytes = System.IO.File.ReadAllBytes(filePath); 
+            return File(bytes, "application/octet-stream", documentViewModel.FileName);
+        }
+
+
+
     }
 }

@@ -1,3 +1,4 @@
+@import url('site.css');
 html {
   font-size: 14px;
 }
@@ -17,6 +18,19 @@ html {
   min-height: 100%;
 }
 
-body {
-  margin-bottom: 60px;
+/*body {*/
+    /*background-image: url('images/document-management-golden-cog-gears-d-mechanism-metallic-render-78781821.jpg');
+    margin-bottom: 60px;
+    background-size: cover;
+    background-repeat: no-repeat;*/
+/*}*/
+body.index-page {
+    background-image: url('/Images/document-management-data-system-business-internet-technology-concept-102057370.jpg');
+    background-size: cover;
+    background-position: center;
 }
+
+
+
+    
+
